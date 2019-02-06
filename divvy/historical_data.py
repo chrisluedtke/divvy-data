@@ -4,6 +4,8 @@ from typing import List
 from lxml import html
 import pandas as pd
 
+from . import stations_feed
+
 __all__ = [
     'get_data',
 ]
@@ -100,18 +102,16 @@ def get_data(year, write_to:str = None, rides=False, stations=False):
                 fn = fpath.split('/')[-1]
                 if ((rides or stations) and fn.endswith(('.csv', '.xlsx'))
                     and not fn.startswith('.')):
-
                     quarter = re.findall('Q[1-4]', fn)
                     if quarter:
                         year_lookup = f"{z_year}_{''.join(quarter)}"
                     else:
                         year_lookup = z_year
-
                 else:
                     continue
 
                 if rides and '_Trips_' in fn:
-                    print(fn, z_year, ''.join(quarter))
+                    print(fn, z_year, year_lookup)
                     df = (pd.read_csv(z.open(fpath))
                             .rename(columns=RD_COL_MAP))
 
@@ -126,7 +126,6 @@ def get_data(year, write_to:str = None, rides=False, stations=False):
                     print(fn, z_year, ''.join(quarter))
                     if fn.endswith('.csv'):
                         df = pd.read_csv(z.open(fpath))
-                        # handle dates here
                     elif fn.endswith('.xlsx'):
                         df = pd.read_excel(z.open(fpath))
 
@@ -135,14 +134,17 @@ def get_data(year, write_to:str = None, rides=False, stations=False):
                         'online date':'online_date',
                     })
 
-                    if STN_DT_FORM.get(z_year):
+                    df['source'] = year_lookup
+
+                    if STN_DT_FORM.get(year_lookup):
                         df['online_date'] = pd.to_datetime(
-                            df['online_date'], format=STN_DT_FORM[z_year],
+                            df['online_date'], format=STN_DT_FORM[year_lookup],
                             errors='coerce'
                         )
-                    elif z_year=='2015':
-                        df['online_date'] = pd.to_datetime('2015', format="%Y")
+                    elif year_lookup=='2015':
+                        df['online_date'] = pd.to_datetime('2015-12-31 23:59:59')
                     else:
+                        print('Could not lookup date format')
                         df['online_date'] = pd.to_datetime(
                             df['online_date'], errors='coerce'
                         )
@@ -157,7 +159,21 @@ def get_data(year, write_to:str = None, rides=False, stations=False):
                                                          .replace(',', '')
                                                          .astype(float))
     if station_dfs:
-        station_dfs = (pd.concat(station_dfs, ignore_index=True)
-                         .sort_values('online_date'))
+        station_feed = stations_feed.get_data()
+        cols = ['id', 'latitude', 'longitude',
+                'stationName', 'lastCommunicationTime']
+        station_feed = station_feed[cols].rename(columns={
+            'stationName':'name',
+            'lastCommunicationTime':'online_date'
+        })
+        station_feed['source'] = station_feed['online_date'].astype(str)
+        station_dfs.append(station_feed)
+
+        station_dfs = (pd.concat(station_dfs, ignore_index=True, sort=True)
+                         .sort_values(['source','online_date']))
+
+        drop_cols = ['city', 'Unnamed: 7', 'landmark']
+        keep_cols = [_ for _ in station_dfs if _ not in drop_cols]
+        station_dfs = station_dfs[keep_cols]
 
     return (ride_dfs, station_dfs)
