@@ -119,6 +119,10 @@ def get_data(year, write_to:str = None, rides=False, stations=False):
                         df['start_time'], format=RD_DT_FORM[year_lookup],
                         errors='coerce'
                     )
+                    df['end_time'] = pd.to_datetime(
+                        df['end_time'], format=RD_DT_FORM[year_lookup],
+                        errors='coerce'
+                    )
 
                     ride_dfs.append(df)
 
@@ -132,6 +136,7 @@ def get_data(year, write_to:str = None, rides=False, stations=False):
                     df = df.rename(columns={
                         'dateCreated':'online_date',
                         'online date':'online_date',
+                        'birthday':'birthyear'
                     })
 
                     df['source'] = year_lookup
