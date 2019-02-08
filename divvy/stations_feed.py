@@ -10,6 +10,7 @@ def get_data(url:str = "https://feeds.divvybikes.com/stations/stations.json"):
         r  = r.json()
         df = (pd.DataFrame(r['stationBeanList'])
                 .assign(executionTime = r['executionTime']))
+        df['lastCommunicationTime'] = pd.to_datetime(df.lastCommunicationTime)
         return df
 
     else:
@@ -26,9 +27,9 @@ def update_data(pre_df, dupe_cols):
         new_df = pre_df
         diff = pd.DataFrame()
     else:
-        diff = new_df.loc[
-            ~new_df.set_index(dupe_cols).index.isin(pre_df.set_index(dupe_cols).index)
-        ]
+        diff = new_df.loc[~(new_df.set_index(dupe_cols)
+                                  .index
+                                  .isin(pre_df.set_index(dupe_cols).index))]
 
         if not diff.empty:
             print(f"{call_time}: Called & Updated")

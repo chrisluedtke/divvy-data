@@ -1,4 +1,4 @@
-import io, re, requests, zipfile
+import io, os, re, requests, zipfile
 from typing import List
 
 from lxml import html
@@ -60,12 +60,15 @@ RD_COL_MAP = {
     '05 - Member Details Member Birthday Year':'birthyear',
     'stoptime':'end_time',
     'starttime':'start_time',
+    'birthday':'birthyear'
 }
 
 
-def get_data(year, write_to:str = None, rides=False, stations=False):
+def get_data(year, write_to:str = None, rides=True, stations=True):
     """
     Returns (pd.DataFrame of rides, pd.DataFrame of stations)
+
+    write_to: optional full folder path to extract zip files
     """
 #     cols = ['trip_id', 'start_time', 'end_time', 'bikeid', 'tripduration',
 #             'from_station_id', 'from_station_name', 'to_station_id',
@@ -76,16 +79,17 @@ def get_data(year, write_to:str = None, rides=False, stations=False):
     ride_dfs = []
     station_dfs = []
 
+    if not (rides or stations):
+        return (ride_dfs, station_dfs)
+
     r = requests.get('https://www.divvybikes.com/system-data')
     webpage = html.fromstring(r.content)
 
     base_source = 'https://s3.amazonaws.com/divvy-data/tripdata/'
-    for url in set(webpage.xpath('//a/@href')):
-        if base_source in url and url.endswith('.zip'):
-            pass
-        else:
-            continue
+    urls = [url for url in set(webpage.xpath('//a/@href'))
+            if (base_source in url and url.endswith('.zip'))]
 
+    for url in sorted(urls):
         z_fn = url.split('/')[-1]
         z_year = re.findall(r'\d{4}', z_fn)[0]
         if z_year not in year:
@@ -96,12 +100,12 @@ def get_data(year, write_to:str = None, rides=False, stations=False):
         r = requests.get(url)
         with zipfile.ZipFile(io.BytesIO(r.content)) as z:
             if write_to:
-                z.extractall(f"data/{z_fn.replace('.zip', '')}")
+                write_path = os.path.join(write_to, z_fn.replace('.zip', ''))
+                z.extractall(write_path)
 
             for fpath in z.namelist():
                 fn = fpath.split('/')[-1]
-                if ((rides or stations) and fn.endswith(('.csv', '.xlsx'))
-                    and not fn.startswith('.')):
+                if fn.endswith(('.csv', '.xlsx')) and not fn.startswith('.'):
                     quarter = re.findall('Q[1-4]', fn)
                     if quarter:
                         year_lookup = f"{z_year}_{''.join(quarter)}"
@@ -110,8 +114,8 @@ def get_data(year, write_to:str = None, rides=False, stations=False):
                 else:
                     continue
 
-                if rides and '_Trips_' in fn:
-                    print(fn, z_year, year_lookup)
+                if rides and '_trips_' in fn.lower():
+                    print(fn, year_lookup)
                     df = (pd.read_csv(z.open(fpath))
                             .rename(columns=RD_COL_MAP))
 
@@ -126,8 +130,8 @@ def get_data(year, write_to:str = None, rides=False, stations=False):
 
                     ride_dfs.append(df)
 
-                elif stations and '_Stations_' in fn:
-                    print(fn, z_year, ''.join(quarter))
+                elif stations and '_stations_' in fn.lower():
+                    print(fn, year_lookup)
                     if fn.endswith('.csv'):
                         df = pd.read_csv(z.open(fpath))
                     elif fn.endswith('.xlsx'):
@@ -136,7 +140,6 @@ def get_data(year, write_to:str = None, rides=False, stations=False):
                     df = df.rename(columns={
                         'dateCreated':'online_date',
                         'online date':'online_date',
-                        'birthday':'birthyear'
                     })
 
                     df['source'] = year_lookup
@@ -146,36 +149,32 @@ def get_data(year, write_to:str = None, rides=False, stations=False):
                             df['online_date'], format=STN_DT_FORM[year_lookup],
                             errors='coerce'
                         )
-                    elif year_lookup=='2015':
-                        df['online_date'] = pd.to_datetime('2015-12-31 23:59:59')
                     else:
                         print('Could not lookup date format')
-                        df['online_date'] = pd.to_datetime(
-                            df['online_date'], errors='coerce'
-                        )
 
                     station_dfs.append(df)
 
     if ride_dfs:
-        ride_dfs = (pd.concat(ride_dfs, ignore_index=True)
+        ride_dfs = (pd.concat(ride_dfs, ignore_index=True, sort=True)
                       .sort_values('start_time'))
         ride_dfs['tripduration'] = (ride_dfs.tripduration.astype(str)
                                                          .str
                                                          .replace(',', '')
                                                          .astype(float))
     if station_dfs:
-        station_feed = stations_feed.get_data()
-        cols = ['id', 'latitude', 'longitude',
-                'stationName', 'lastCommunicationTime']
-        station_feed = station_feed[cols].rename(columns={
-            'stationName':'name',
-            'lastCommunicationTime':'online_date'
-        })
-        station_feed['source'] = station_feed['online_date'].astype(str)
-        station_dfs.append(station_feed)
+        if '2018' in year:
+            station_feed = stations_feed.get_data()
+            cols = ['id', 'latitude', 'longitude',
+                    'stationName', 'lastCommunicationTime']
+            station_feed = station_feed[cols].rename(columns={
+                'stationName':'name',
+                'lastCommunicationTime':'source'
+            })
+            station_feed['source'] = station_feed.source.dt.strftime("%Y-%m-%d")
+            station_dfs.append(station_feed)
 
         station_dfs = (pd.concat(station_dfs, ignore_index=True, sort=True)
-                         .sort_values(['source','online_date']))
+                         .sort_values(['id', 'source', 'online_date']))
 
         drop_cols = ['city', 'Unnamed: 7', 'landmark']
         keep_cols = [_ for _ in station_dfs if _ not in drop_cols]
