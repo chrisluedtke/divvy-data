@@ -6,15 +6,15 @@ import pandas as pd
 def get_data(url:str = "https://feeds.divvybikes.com/stations/stations.json"):
     r = requests.get(url)
 
-    if r.status_code == requests.codes.ok:
-        r  = r.json()
-        df = (pd.DataFrame(r['stationBeanList'])
-                .assign(executionTime = r['executionTime']))
-        df['lastCommunicationTime'] = pd.to_datetime(df.lastCommunicationTime)
-        return df
-
-    else:
+    if r.status_code != requests.codes.ok:
         r.raise_for_status()
+
+    r  = r.json()
+    df = (pd.DataFrame(r['stationBeanList'])
+            .assign(executionTime = r['executionTime']))
+    df['lastCommunicationTime'] = pd.to_datetime(df.lastCommunicationTime)
+    
+    return df
 
 
 def update_data(pre_df, dupe_cols):
