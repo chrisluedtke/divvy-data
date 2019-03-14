@@ -64,11 +64,10 @@ RD_COL_MAP = {
 }
 
 
-def get_data(year, write_to:str = None, rides=True, stations=True):
-    """
-    Returns (pd.DataFrame of rides, pd.DataFrame of stations)
-
-    write_to: optional full folder path to extract zip files
+def get_data(year:List[str], write_to:str = None, rides=True, stations=True):
+    """Gathers and cleans historical Divvy data
+    write_to: optional local folder path to extract zip files to
+    returns: (pandas.DataFrame of rides, pandas.DataFrame of stations)
     """
 #     cols = ['trip_id', 'start_time', 'end_time', 'bikeid', 'tripduration',
 #             'from_station_id', 'from_station_name', 'to_station_id',
