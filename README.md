@@ -11,3 +11,15 @@ Fork/clone the repository or pip install my `divvy` package:
 ```
 pip install git+https://github.com/chrisluedtke/divvy-data-analysis.git
 ```
+
+## Usage
+```python
+import pandas as pd
+
+import divvy
+
+df = divvy.stations_feed.monitor_data(runtime_sec=60)
+
+# filter to stations that received interaction
+df = df.loc[df['id'].duplicated(keep=False)]
+```
