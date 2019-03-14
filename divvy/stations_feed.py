@@ -13,7 +13,7 @@ def get_data(url:str = "https://feeds.divvybikes.com/stations/stations.json"):
     df = (pd.DataFrame(r['stationBeanList'])
             .assign(executionTime = r['executionTime']))
     df['lastCommunicationTime'] = pd.to_datetime(df.lastCommunicationTime)
-    
+
     return df
 
 
@@ -39,7 +39,14 @@ def update_data(pre_df, dupe_cols):
         return new_df, diff
 
 
-def monitor_data(interval_sec = 5):
+def monitor_data(interval_sec = 5, runtime_sec = 1000):
+    """Listens to Divvy station data JSON feed and tracks events
+
+    interval_sec: default 5 seconds.
+    runtime_sec: default 1000 seconds. Set to None to run indefinitely.
+
+    returns: pandas.DataFrame
+    """
     dupe_cols = ['id', 'availableBikes', 'availableDocks', 'status',
                  'kioskType']
 
@@ -47,13 +54,22 @@ def monitor_data(interval_sec = 5):
     diff_log = [df.copy()]
 
     try:
-        while True:
-            df, diff = update_data(pre_df=df, dupe_cols=dupe_cols)
+        if runtime_sec:
+            end_time = time.time() + runtime_sec
+        else:
+            end_time = float('inf')
 
+        while time.time() < end_time:
+            query_start = time.time()
+
+            df, diff = update_data(pre_df=df, dupe_cols=dupe_cols)
             if not diff.empty:
                 diff_log.append(diff)
 
-            time.sleep(interval_sec)
+            elapsed = query_start - time.time()
+            delay = interval_sec - elapsed
+            if delay > 0:
+                time.sleep(delay)
 
     except KeyboardInterrupt:
         pass
