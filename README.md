@@ -13,6 +13,19 @@ pip install git+https://github.com/chrisluedtke/divvy-data-analysis.git
 ```
 
 ## Usage
+### Historical Data
+```python
+import divvy
+
+# gather historical data over all years
+rides, stations = divvy.historical_data.get_data(
+    years=[str(yr) for yr in range(2013,2019)],
+    rides=True,
+    stations=True
+)
+```
+
+### Live Data
 ```python
 import pandas as pd
 
@@ -20,6 +33,6 @@ import divvy
 
 df = divvy.stations_feed.monitor_data(runtime_sec=60)
 
-# filter to stations that received interaction
+# filter to stations that received interactions
 df = df.loc[df['id'].duplicated(keep=False)]
 ```
