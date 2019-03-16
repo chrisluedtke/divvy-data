@@ -1,5 +1,6 @@
 # Mine
-data/*
+data/*.pkl
+data/*rides*
 img/*
 maps/*
 geckodriver.exe
