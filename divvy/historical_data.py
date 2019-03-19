@@ -92,7 +92,7 @@ def get_2018_station_backup():
 
 def get_data(years:List[str], write_to:str = None, rides=True, stations=True):
     """Gathers and cleans historical Divvy data
-    
+
     write_to: optional local folder path to extract zip files to
     returns: (pandas.DataFrame of rides, pandas.DataFrame of stations)
     """
@@ -163,6 +163,8 @@ def get_data(years:List[str], write_to:str = None, rides=True, stations=True):
                         df = pd.read_csv(z.open(fpath))
                     elif fn.endswith('.xlsx'):
                         df = pd.read_excel(z.open(fpath))
+                    else:
+                        continue
 
                     df = df.rename(columns={
                         'dateCreated':'online_date',
