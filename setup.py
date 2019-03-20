@@ -13,5 +13,10 @@ setup(
     packages=['divvydata'],
     author="Chris Luedtke",
     author_email="chrisluedtke@gmail.com",
+    python_requires=">=3.6",
     install_requires=["lxml", "pandas"],
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "Operating System :: OS Independent",
+    ],
 )
