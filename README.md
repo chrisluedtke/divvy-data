@@ -1,5 +1,5 @@
-# Divvy Data Analysis
-Exploratory and explanatory analysis of Chicago's bikeshare system.
+# Divvy Data
+A package to access historical and live Chicago bikeshare data. Includes exploratory and explanatory analysis notebook.
 
 **Resources**
 * Write-up: [The Ultimate Day of Chicago Bikeshare](https://chrisluedtke.github.io/divvy-data.html)
@@ -8,7 +8,7 @@ Exploratory and explanatory analysis of Chicago's bikeshare system.
 
 ## Set up
 
-Fork/clone the repository or pip install my `divvy` package:
+Fork/clone the repository or pip install my `divvydata` package:
 ```
 pip install git+https://github.com/chrisluedtke/divvy-data-analysis.git
 ```
@@ -16,10 +16,10 @@ pip install git+https://github.com/chrisluedtke/divvy-data-analysis.git
 ## Usage
 ### Historical Data
 ```python
-import divvy
+import divvydata
 
 # gather historical data over all years
-rides, stations = divvy.historical_data.get_data(
+rides, stations = divvydata.get_historical_data(
     years=[str(yr) for yr in range(2013,2019)],
     rides=True,
     stations=True
@@ -28,13 +28,13 @@ rides, stations = divvy.historical_data.get_data(
 
 ### Live Data
 ```python
-import pandas as pd
+import divvydata
 
-import divvy
-
-df = divvy.stations_feed.monitor_data(runtime_sec=60)
+sf = divvydata.StationsFeed()
+sf.monitor_data(runtime_sec=60)
 
 # filter to stations that received interactions
+df = sf.event_history
 df = df.loc[df['id'].duplicated(keep=False)]
 ```
 
