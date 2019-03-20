@@ -1,14 +1,20 @@
+"""
+Pulls data from:
+https://www.divvybikes.com/system-data
+https://s3.amazonaws.com/divvy-data/tripdata
+"""
+# known inconsistency example:
+# trip 4095, 2013-06-27 12:06 <-- wby lower trip id, but greater datetime?
+# trip 4113, 2013-06-27 11:09
+
 import io, os, re, requests, zipfile
 from typing import List
 
 from lxml import html
 import pandas as pd
 
-from . import stations_feed
+from .stations_feed import StationsFeed
 
-__all__ = [
-    'get_data',
-]
 
 STN_DT_FORM = {
     '2013': "%m/%d/%Y", # Not labeled for quarters
@@ -20,6 +26,13 @@ STN_DT_FORM = {
     '2016_Q4':"%m/%d/%Y",
     '2017_Q1Q2':"%m/%d/%Y %H:%M:%S",
     '2017_Q3Q4':"%m/%d/%Y %H:%M",
+}
+
+STN_COL_MAP = {
+    'latitude': 'lat',
+    'longitude': 'lon',
+    'dateCreated':'online_date',
+    'online date':'online_date',
 }
 
 RD_DT_FORM = {
@@ -79,27 +92,31 @@ def year_lookup_to_date(yr_lookup:str) -> str:
 
     return date
 
+def get_current_stations():
+    """Pulls most recent data from Divvy JSON feed.
 
-def get_2018_station_backup():
-    backup_2018_url = ('https://raw.githubusercontent.com/chrisluedtke/'
-                       'divvy-data-analysis/master/data/'
-                       'stations_2019_03_05.csv')
-    df = pd.read_csv(backup_2018_url,
-                     date_parser=pd.to_datetime,
-                     parse_dates=['lastCommunicationTime'])
+    Necessar because Divvy did not provide 2018 station data.
+    """
+    df = StationsFeed().get_current_data()
+    cols = ['id', 'stationName', 'latitude', 'longitude',
+            'totalDocks', 'lastCommunicationTime']
+    df = df[cols].rename(columns={
+        'stationName':'name',
+        'lastCommunicationTime':'as_of_date',
+        'totalDocks':'dpcapacity'
+    })
+    df = df.rename(columns=STN_COL_MAP)
+    df['as_of_date'] = df.as_of_date.dt.strftime("%Y-%m-%d")
+
     return df
 
-
-def get_data(years:List[str], write_to:str = None, rides=True, stations=True):
+def get_historical_data(years:List[str], write_to:str = None, rides=True, stations=True):
     """Gathers and cleans historical Divvy data
 
     write_to: optional local folder path to extract zip files to
     returns: (pandas.DataFrame of rides, pandas.DataFrame of stations)
     """
 
-#     cols = ['trip_id', 'start_time', 'end_time', 'bikeid', 'tripduration',
-#             'from_station_id', 'from_station_name', 'to_station_id',
-#             'to_station_name', 'usertype', 'gender', 'birthyear']
     if isinstance(years, str):
         years = [years]
 
@@ -107,7 +124,7 @@ def get_data(years:List[str], write_to:str = None, rides=True, stations=True):
     station_dfs = []
 
     if not (rides or stations):
-        return (ride_dfs, station_dfs)
+        return ride_dfs, station_dfs
 
     r = requests.get('https://www.divvybikes.com/system-data')
     webpage = html.fromstring(r.content)
@@ -147,11 +164,13 @@ def get_data(years:List[str], write_to:str = None, rides=True, stations=True):
                             .rename(columns=RD_COL_MAP))
 
                     df['start_time'] = pd.to_datetime(
-                        df['start_time'], format=RD_DT_FORM[year_lookup],
+                        df['start_time'],
+                        format=RD_DT_FORM.get(year_lookup, None),
                         errors='coerce'
                     )
                     df['end_time'] = pd.to_datetime(
-                        df['end_time'], format=RD_DT_FORM[year_lookup],
+                        df['end_time'],
+                        format=RD_DT_FORM.get(year_lookup, None),
                         errors='coerce'
                     )
 
@@ -166,11 +185,7 @@ def get_data(years:List[str], write_to:str = None, rides=True, stations=True):
                     else:
                         continue
 
-                    df = df.rename(columns={
-                        'dateCreated':'online_date',
-                        'online date':'online_date',
-                    })
-
+                    df = df.rename(columns=STN_COL_MAP)
                     df['as_of_date'] = year_lookup_to_date(year_lookup)
 
                     if 'online_date' in df:
@@ -184,32 +199,30 @@ def get_data(years:List[str], write_to:str = None, rides=True, stations=True):
 
     if rides:
         ride_dfs = (pd.concat(ride_dfs, ignore_index=True, sort=True)
-                      .sort_values('start_time'))
-        ride_dfs['tripduration'] = (ride_dfs.tripduration.astype(str).str
-                                                         .replace(',', '')
-                                                         .astype(float))
+                      .sort_values('start_time')
+                      .reset_index(drop=True))
+        ride_dfs['tripduration'] = (
+            ride_dfs.tripduration.astype(str).str.replace(',', '').astype(float)
+        )
+
+        cols = ['trip_id', 'bikeid', 'start_time', 'end_time', 'tripduration',
+                'from_station_id', 'from_station_name', 'to_station_id',
+                'to_station_name', 'usertype', 'gender', 'birthyear']
+        ride_dfs = ride_dfs[[col for col in cols if col in ride_dfs]]
+
     if stations:
         if '2018' in years:
-            # station_feed = stations_feed.get_data()
-            station_feed = get_2018_station_backup()
-            cols = ['id', 'stationName', 'latitude', 'longitude',
-                    'totalDocks', 'lastCommunicationTime']
-            station_feed = station_feed[cols].rename(columns={
-                'stationName':'name',
-                'lastCommunicationTime':'as_of_date',
-                'totalDocks':'dpcapacity'
-            })
-            station_feed['as_of_date'] = (station_feed.as_of_date.dt
-                                                      .strftime("%Y-%m-%d"))
-            station_dfs.append(station_feed)
+            df = get_current_stations()
+            station_dfs.append(df)
 
-        station_dfs = (pd.concat(station_dfs, ignore_index=True, sort=True)
-                         .sort_values(['id', 'as_of_date']))
-
+        station_dfs = pd.concat(station_dfs, ignore_index=True, sort=True)
         station_dfs['as_of_date'] = pd.to_datetime(station_dfs['as_of_date'])
+        station_dfs = (station_dfs.sort_values(['id', 'as_of_date'])
+                                  .reset_index(drop=True))
 
-        drop_cols = ['city', 'Unnamed: 7', 'landmark']
-        keep_cols = [col for col in station_dfs if col not in drop_cols]
-        station_dfs = station_dfs[keep_cols]
+        # excludes ['city', 'Unnamed: 7']
+        cols = ['id', 'name', 'as_of_date', 'lat', 'lon', 'dpcapacity',
+                'online_date', 'landmark']
+        station_dfs = station_dfs[[col for col in cols if col in station_dfs]]
 
-    return (ride_dfs, station_dfs)
+    return ride_dfs, station_dfs
