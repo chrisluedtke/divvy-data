@@ -1,7 +1,8 @@
 # Mine
 data/*.pkl
 data/*rides*
-img/*
+img/*.mov
+img/maps/*
 maps/*
 geckodriver.exe
 
@@ -111,3 +112,4 @@ venv.bak/
 .mypy_cache/
 *.ttf
 notebook-ridership-prediction.ipynb
+README.html
