@@ -77,6 +77,16 @@ RD_COL_MAP = {
 }
 
 
+def parse_zip_urls_from_url(url):
+    r = requests.get(url)
+    webpage = html.fromstring(r.content)
+
+    base_source = 'https://s3.amazonaws.com/divvy-data/tripdata/'
+    urls = [url for url in set(webpage.xpath('//a/@href'))
+            if (base_source in url and url.endswith('.zip'))]
+
+    return urls
+
 def year_lookup_to_date(yr_lookup:str) -> str:
     q_map = {
         'Q1':'03-31',
@@ -92,6 +102,7 @@ def year_lookup_to_date(yr_lookup:str) -> str:
 
     return date
 
+
 def get_current_stations():
     """Pulls most recent data from Divvy JSON feed.
 
@@ -106,11 +117,79 @@ def get_current_stations():
         'totalDocks':'dpcapacity'
     })
     df = df.rename(columns=STN_COL_MAP)
-    df['as_of_date'] = df.as_of_date.dt.strftime("%Y-%m-%d")
 
     return df
 
-def get_historical_data(years:List[str], write_to:str = None, rides=True, stations=True):
+
+def process_ride_df(z, fpath, year_lookup):
+    df = (pd.read_csv(z.open(fpath))
+            .rename(columns=RD_COL_MAP))
+
+    df['start_time'] = pd.to_datetime(
+        df['start_time'],
+        format=RD_DT_FORM.get(year_lookup, None),
+        errors='coerce'
+    )
+    df['end_time'] = pd.to_datetime(
+        df['end_time'],
+        format=RD_DT_FORM.get(year_lookup, None),
+        errors='coerce'
+    )
+
+    return df
+
+
+def process_station_df(z, fpath, year_lookup):
+    if fpath.endswith('.csv'):
+        df = pd.read_csv(z.open(fpath))
+    else: # must be '.xlsx'
+        df = pd.read_excel(z.open(fpath))
+
+    df = df.rename(columns=STN_COL_MAP)
+    df['as_of_date'] = year_lookup_to_date(year_lookup)
+    df['as_of_date'] = pd.to_datetime(df['as_of_date'])
+
+    if 'online_date' in df:
+        df['online_date'] = pd.to_datetime(
+            df['online_date'],
+            format=STN_DT_FORM.get(year_lookup, None),
+            errors='coerce'
+        )
+
+    return df
+
+
+def combine_ride_dfs(dfs:List[pd.DataFrame]) -> pd.DataFrame:
+    dfs = (pd.concat(dfs, ignore_index=True, sort=True)
+             .sort_values('start_time')
+             .reset_index(drop=True))
+    dfs['tripduration'] = (
+        dfs.tripduration.astype(str).str.replace(',', '').astype(float)
+    )
+
+    cols = ['trip_id', 'bikeid', 'start_time', 'end_time', 'tripduration',
+            'from_station_id', 'from_station_name', 'to_station_id',
+            'to_station_name', 'usertype', 'gender', 'birthyear']
+    dfs = dfs[[col for col in cols if col in dfs]]
+
+    return dfs
+
+
+def combine_station_dfs(dfs:List[pd.DataFrame]) -> pd.DataFrame:
+    dfs = (pd.concat(dfs, ignore_index=True, sort=True)
+            .sort_values(['id', 'as_of_date'])
+            .reset_index(drop=True))
+
+    # excludes ['city', 'Unnamed: 7']
+    cols = ['id', 'name', 'as_of_date', 'lat', 'lon', 'dpcapacity',
+            'online_date', 'landmark']
+    dfs = dfs[[col for col in cols if col in dfs]]
+
+    return dfs
+
+
+def get_historical_data(years:List[str], write_to:str = '', rides=True,
+                        stations=True):
     """Gathers and cleans historical Divvy data
 
     write_to: optional local folder path to extract zip files to
@@ -126,16 +205,11 @@ def get_historical_data(years:List[str], write_to:str = None, rides=True, statio
     if not (rides or stations):
         return ride_dfs, station_dfs
 
-    r = requests.get('https://www.divvybikes.com/system-data')
-    webpage = html.fromstring(r.content)
-
-    base_source = 'https://s3.amazonaws.com/divvy-data/tripdata/'
-    urls = [url for url in set(webpage.xpath('//a/@href'))
-            if (base_source in url and url.endswith('.zip'))]
+    urls = parse_zip_urls_from_url('https://www.divvybikes.com/system-data')
 
     for url in sorted(urls):
         z_fn = url.split('/')[-1]
-        z_year = re.findall(r'\d{4}', z_fn)[0]
+        z_year = re.findall(r'20\d{2}', z_fn)[0]
         if z_year not in years:
             continue
 
@@ -160,69 +234,22 @@ def get_historical_data(years:List[str], write_to:str = None, rides=True, statio
 
                 if rides and '_trips_' in fn.lower():
                     print(fn, year_lookup)
-                    df = (pd.read_csv(z.open(fpath))
-                            .rename(columns=RD_COL_MAP))
-
-                    df['start_time'] = pd.to_datetime(
-                        df['start_time'],
-                        format=RD_DT_FORM.get(year_lookup, None),
-                        errors='coerce'
-                    )
-                    df['end_time'] = pd.to_datetime(
-                        df['end_time'],
-                        format=RD_DT_FORM.get(year_lookup, None),
-                        errors='coerce'
-                    )
-
+                    df = process_ride_df(z, fpath, year_lookup)
                     ride_dfs.append(df)
 
                 elif stations and '_stations_' in fn.lower():
                     print(fn, year_lookup)
-                    if fn.endswith('.csv'):
-                        df = pd.read_csv(z.open(fpath))
-                    elif fn.endswith('.xlsx'):
-                        df = pd.read_excel(z.open(fpath))
-                    else:
-                        continue
-
-                    df = df.rename(columns=STN_COL_MAP)
-                    df['as_of_date'] = year_lookup_to_date(year_lookup)
-
-                    if 'online_date' in df:
-                        df['online_date'] = pd.to_datetime(
-                            df['online_date'],
-                            format=STN_DT_FORM.get(year_lookup, None),
-                            errors='coerce'
-                        )
-
+                    df = process_station_df(z, fpath, year_lookup)
                     station_dfs.append(df)
 
     if rides:
-        ride_dfs = (pd.concat(ride_dfs, ignore_index=True, sort=True)
-                      .sort_values('start_time')
-                      .reset_index(drop=True))
-        ride_dfs['tripduration'] = (
-            ride_dfs.tripduration.astype(str).str.replace(',', '').astype(float)
-        )
-
-        cols = ['trip_id', 'bikeid', 'start_time', 'end_time', 'tripduration',
-                'from_station_id', 'from_station_name', 'to_station_id',
-                'to_station_name', 'usertype', 'gender', 'birthyear']
-        ride_dfs = ride_dfs[[col for col in cols if col in ride_dfs]]
+        ride_dfs = combine_ride_dfs(ride_dfs)
 
     if stations:
         if '2018' in years:
             df = get_current_stations()
             station_dfs.append(df)
 
-        station_dfs = pd.concat(station_dfs, ignore_index=True, sort=True)
-        station_dfs['as_of_date'] = pd.to_datetime(station_dfs['as_of_date'])
-        station_dfs = (station_dfs.sort_values(['id', 'as_of_date'])
-                                  .reset_index(drop=True))
-
-        # excludes ['city', 'Unnamed: 7']
-        cols = ['id', 'name', 'as_of_date', 'lat', 'lon', 'dpcapacity',
-                'online_date', 'landmark']
-        station_dfs = station_dfs[[col for col in cols if col in station_dfs]]
+        station_dfs = combine_station_dfs(station_dfs)
 
     return ride_dfs, station_dfs

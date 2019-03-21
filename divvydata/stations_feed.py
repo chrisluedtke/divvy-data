@@ -2,30 +2,22 @@ import requests, time
 
 import pandas as pd
 
+import requests
+
+
 class StationsFeed(object):
     """Client that pulls data from Divvy JSON feed:
 
     https://feeds.divvybikes.com/stations/stations.json
+
+    Attributes:
+        data:
+        event_history:
     """
 
     def __init__(self):
         self.data = pd.DataFrame()
         self.event_history = pd.DataFrame()
-
-    @property
-    def data_call_time(self):
-        if self.data.empty:
-            return None
-
-        return self.data['callTime'].values[0]
-
-    @property
-    def event_history_time_span(self):
-        if self.event_history.empty:
-            return None
-
-        return (self.event_history['callTime'].min(),
-                self.event_history['callTime'].max())
 
     @staticmethod
     def get_current_data():
@@ -44,14 +36,45 @@ class StationsFeed(object):
         return df
 
     def update_data(self):
-        """Overwrites `data` attribute with most recent station data."""
+        """Updates `data` attribute with most recent station data."""
         self.data = StationsFeed.get_current_data()
 
-    @staticmethod
-    def _get_diff(pre_df):
-        dupe_cols = ['id', 'availableBikes', 'availableDocks', 'status',
-                     'kioskType']
+    def monitor_event_history(self, interval_sec = 5.0, runtime_sec = 1000):
+        """Updates `event_history` attribute with live data from  Divvy
+        JSON feed. Only saves differences between updates.
 
+        interval_sec: default 5 seconds.
+        runtime_sec: default 1000 seconds. Set to None to run indefinitely.
+
+        returns: pandas.DataFrame
+        """
+
+        self.event_history = StationsFeed.get_current_data()
+        df = self.event_history.copy()
+
+        if runtime_sec:
+            end_time = time.time() + runtime_sec
+        else:
+            end_time = float('inf')
+
+        try:
+            while time.time() < end_time:
+                query_start = time.time()
+
+                df, diff = StationsFeed._get_monitor_update(pre_df=df)
+                self.event_history = self.event_history.append(diff)
+
+                elapsed = query_start - time.time()
+                delay = interval_sec - elapsed
+                if delay > 0:
+                    time.sleep(delay)
+
+        except KeyboardInterrupt:
+            pass
+
+    @staticmethod
+    def _get_monitor_update(pre_df):
+        """Returns updated data difference between old and updated data"""
         call_time = time.strftime('%Y-%m-%d %H:%M:%S')
 
         try:
@@ -61,6 +84,8 @@ class StationsFeed(object):
             new_df = pre_df
             diff = pd.DataFrame()
         else:
+            dupe_cols = ['id', 'availableBikes', 'availableDocks', 'status',
+                         'kioskType']
             diff = new_df.loc[~(new_df.set_index(dupe_cols)
                                       .index
                                       .isin(pre_df.set_index(dupe_cols).index))]
@@ -71,43 +96,3 @@ class StationsFeed(object):
                 print(f"{call_time}: Called")
         finally:
             return new_df, diff
-
-    def monitor_data(self, interval_sec = 5, runtime_sec = 1000):
-        """Listens to JSON feed and tracks events.
-
-        interval_sec: default 5 seconds.
-        runtime_sec: default 1000 seconds. Set to None to run indefinitely.
-
-        returns: pandas.DataFrame
-        """
-
-        df = StationsFeed.get_current_data()
-        diff_log = [df.copy()]
-
-        try:
-            if runtime_sec:
-                end_time = time.time() + runtime_sec
-            else:
-                end_time = float('inf')
-
-            while time.time() < end_time:
-                query_start = time.time()
-
-                df, diff = StationsFeed._get_diff(pre_df=df)
-                if not diff.empty:
-                    diff_log.append(diff)
-
-                elapsed = query_start - time.time()
-                delay = interval_sec - elapsed
-                if delay > 0:
-                    time.sleep(delay)
-
-        except KeyboardInterrupt:
-            pass
-
-        finally:
-            df = (pd.concat(diff_log, ignore_index=True)
-                    .sort_values(['id', 'callTime'],
-                                 ascending=[True, True]))
-
-            self.event_history = df

@@ -1,5 +1,6 @@
 # Mine
 data/*.pkl
+data/*.zip
 data/*rides*
 img/*.mov
 img/maps/*
