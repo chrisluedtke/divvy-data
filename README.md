@@ -39,6 +39,6 @@ df = sf.event_history
 df = df.loc[df['id'].duplicated(keep=False)]
 ```
 
-### License
+### Data Usage Limitations
 
-If you find this repository helpful in your own analysis or project, please cite my name and repository URL. This repository is not affiliated, approved, endorsed, or sponsored by Motivate. See [Divvy's Data Liscense Agreement](https://www.divvybikes.com/data-license-agreement).
+This package does not host or directly provide data, except as cited in analysis notebooks. When using Divvy data, follow [Divvy's Data License Agreement](https://www.divvybikes.com/data-license-agreement).
