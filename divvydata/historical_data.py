@@ -3,11 +3,11 @@ Pulls data from:
 https://www.divvybikes.com/system-data
 https://s3.amazonaws.com/divvy-data/tripdata
 """
-# known inconsistency example:
-# trip 4095, 2013-06-27 12:06 <-- wby lower trip id, but greater datetime?
-# trip 4113, 2013-06-27 11:09
-
-import io, os, re, requests, zipfile
+from io import BytesIO
+import os
+import re
+import requests
+from zipfile import ZipFile
 from typing import List
 
 from lxml import html
@@ -17,63 +17,63 @@ from .stations_feed import StationsFeed
 
 
 STN_DT_FORM = {
-    '2013': "%m/%d/%Y", # Not labeled for quarters
-    '2014_Q1Q2': None, # xlsx file
+    '2013': "%m/%d/%Y",  # Not labeled for quarters
+    '2014_Q1Q2': None,  # xlsx file
     '2014_Q3Q4': "%m/%d/%Y %H:%M",
-    '2015': None, # no date column and not labeled for quarters
-    '2016_Q1Q2':"%m/%d/%Y",
-    '2016_Q3':"%m/%d/%Y",
-    '2016_Q4':"%m/%d/%Y",
-    '2017_Q1Q2':"%m/%d/%Y %H:%M:%S",
-    '2017_Q3Q4':"%m/%d/%Y %H:%M",
+    '2015': None,  # no date column and not labeled for quarters
+    '2016_Q1Q2': "%m/%d/%Y",
+    '2016_Q3': "%m/%d/%Y",
+    '2016_Q4': "%m/%d/%Y",
+    '2017_Q1Q2': "%m/%d/%Y %H:%M:%S",
+    '2017_Q3Q4': "%m/%d/%Y %H:%M",
 }
 
 STN_COL_MAP = {
     'latitude': 'lat',
     'longitude': 'lon',
-    'dateCreated':'online_date',
-    'online date':'online_date',
+    'dateCreated': 'online_date',
+    'online date': 'online_date',
 }
 
 RD_DT_FORM = {
-    '2013':"%Y-%m-%d %H:%M", # Not labeled for quarters
-    '2014_Q1Q2':"%m/%d/%Y %H:%M",
-    '2014_Q3':"%m/%d/%Y %H:%M",
-    '2014_Q4':"%m/%d/%Y %H:%M",
-    '2015_Q1':"%m/%d/%Y %H:%M",
-    '2015_Q2':"%m/%d/%Y %H:%M",
-    '2015':"%m/%d/%Y %H:%M", # Q3 labeled as month integer
-    '2015_Q4':"%m/%d/%Y %H:%M",
-    '2016_Q1':"%m/%d/%Y %H:%M",
-    '2016':"%m/%d/%Y %H:%M", # Q2 labeled as month integer
-    '2016_Q3':"%m/%d/%Y %H:%M:%S",
-    '2016_Q4':"%m/%d/%Y %H:%M:%S",
-    '2017_Q1':"%m/%d/%Y %H:%M:%S",
-    '2017_Q2':"%m/%d/%Y %H:%M:%S",
-    '2017_Q3':"%m/%d/%Y %H:%M:%S",
-    '2017_Q4':"%m/%d/%Y %H:%M",
-    '2018_Q1':"%Y-%m-%d %H:%M:%S",
-    '2018_Q2':"%Y-%m-%d %H:%M:%S",
-    '2018_Q3':"%Y-%m-%d %H:%M:%S",
-    '2018_Q4':"%Y-%m-%d %H:%M:%S",
+    '2013': "%Y-%m-%d %H:%M",  # Not labeled for quarters
+    '2014_Q1Q2': "%m/%d/%Y %H:%M",
+    '2014_Q3': "%m/%d/%Y %H:%M",
+    '2014_Q4': "%m/%d/%Y %H:%M",
+    '2015_Q1': "%m/%d/%Y %H:%M",
+    '2015_Q2': "%m/%d/%Y %H:%M",
+    '2015': "%m/%d/%Y %H:%M",  # Q3 labeled as month integer
+    '2015_Q4': "%m/%d/%Y %H:%M",
+    '2016_Q1': "%m/%d/%Y %H:%M",
+    '2016': "%m/%d/%Y %H:%M",  # Q2 labeled as month integer
+    '2016_Q3': "%m/%d/%Y %H:%M:%S",
+    '2016_Q4': "%m/%d/%Y %H:%M:%S",
+    '2017_Q1': "%m/%d/%Y %H:%M:%S",
+    '2017_Q2': "%m/%d/%Y %H:%M:%S",
+    '2017_Q3': "%m/%d/%Y %H:%M:%S",
+    '2017_Q4': "%m/%d/%Y %H:%M",
+    '2018_Q1': "%Y-%m-%d %H:%M:%S",
+    '2018_Q2': "%Y-%m-%d %H:%M:%S",
+    '2018_Q3': "%Y-%m-%d %H:%M:%S",
+    '2018_Q4': "%Y-%m-%d %H:%M:%S",
 }
 
 RD_COL_MAP = {
-    '01 - Rental Details Rental ID':'trip_id',
-    '01 - Rental Details Local Start Time':'start_time',
-    '01 - Rental Details Local End Time':'end_time',
-    '01 - Rental Details Bike ID':'bikeid',
-    '01 - Rental Details Duration In Seconds Uncapped':'tripduration',
-    '03 - Rental Start Station ID':'from_station_id',
-    '03 - Rental Start Station Name':'from_station_name',
-    '02 - Rental End Station ID':'to_station_id',
-    '02 - Rental End Station Name':'to_station_name',
-    'User Type':'usertype' ,
-    'Member Gender':'gender',
-    '05 - Member Details Member Birthday Year':'birthyear',
-    'stoptime':'end_time',
-    'starttime':'start_time',
-    'birthday':'birthyear'
+    '01 - Rental Details Rental ID': 'trip_id',
+    '01 - Rental Details Local Start Time': 'start_time',
+    '01 - Rental Details Local End Time': 'end_time',
+    '01 - Rental Details Bike ID': 'bikeid',
+    '01 - Rental Details Duration In Seconds Uncapped': 'tripduration',
+    '03 - Rental Start Station ID': 'from_station_id',
+    '03 - Rental Start Station Name': 'from_station_name',
+    '02 - Rental End Station ID': 'to_station_id',
+    '02 - Rental End Station Name': 'to_station_name',
+    'User Type': 'usertype',
+    'Member Gender': 'gender',
+    '05 - Member Details Member Birthday Year': 'birthyear',
+    'stoptime': 'end_time',
+    'starttime': 'start_time',
+    'birthday': 'birthyear',
 }
 
 
@@ -87,12 +87,13 @@ def parse_zip_urls_from_url(url):
 
     return urls
 
-def year_lookup_to_date(yr_lookup:str) -> str:
+
+def year_lookup_to_date(yr_lookup: str) -> str:
     q_map = {
-        'Q1':'03-31',
-        'Q2':'06-30',
-        'Q3':'09-30',
-        'Q4':'12-31',
+        'Q1': '03-31',
+        'Q2': '06-30',
+        'Q3': '09-30',
+        'Q4': '12-31',
     }
 
     yr_l_splt = yr_lookup.split('_')
@@ -112,9 +113,9 @@ def get_current_stations():
     cols = ['id', 'stationName', 'latitude', 'longitude',
             'totalDocks', 'lastCommunicationTime']
     df = df[cols].rename(columns={
-        'stationName':'name',
-        'lastCommunicationTime':'as_of_date',
-        'totalDocks':'dpcapacity'
+        'stationName': 'name',
+        'lastCommunicationTime': 'as_of_date',
+        'totalDocks': 'dpcapacity'
     })
     df = df.rename(columns=STN_COL_MAP)
 
@@ -142,7 +143,7 @@ def process_ride_df(z, fpath, year_lookup):
 def process_station_df(z, fpath, year_lookup):
     if fpath.endswith('.csv'):
         df = pd.read_csv(z.open(fpath))
-    else: # must be '.xlsx'
+    else:  # must be '.xlsx'
         df = pd.read_excel(z.open(fpath))
 
     df = df.rename(columns=STN_COL_MAP)
@@ -159,7 +160,7 @@ def process_station_df(z, fpath, year_lookup):
     return df
 
 
-def combine_ride_dfs(dfs:List[pd.DataFrame]) -> pd.DataFrame:
+def combine_ride_dfs(dfs: List[pd.DataFrame]) -> pd.DataFrame:
     dfs = (pd.concat(dfs, ignore_index=True, sort=True)
              .sort_values('start_time')
              .reset_index(drop=True))
@@ -175,10 +176,10 @@ def combine_ride_dfs(dfs:List[pd.DataFrame]) -> pd.DataFrame:
     return dfs
 
 
-def combine_station_dfs(dfs:List[pd.DataFrame]) -> pd.DataFrame:
+def combine_station_dfs(dfs: List[pd.DataFrame]) -> pd.DataFrame:
     dfs = (pd.concat(dfs, ignore_index=True, sort=True)
-            .sort_values(['id', 'as_of_date'])
-            .reset_index(drop=True))
+             .sort_values(['id', 'as_of_date'])
+             .reset_index(drop=True))
 
     # excludes ['city', 'Unnamed: 7']
     cols = ['id', 'name', 'as_of_date', 'lat', 'lon', 'dpcapacity',
@@ -188,7 +189,7 @@ def combine_station_dfs(dfs:List[pd.DataFrame]) -> pd.DataFrame:
     return dfs
 
 
-def get_historical_data(years:List[str], write_to:str = '', rides=True,
+def get_historical_data(years: List[str], write_to: str = '', rides=True,
                         stations=True):
     """Gathers and cleans historical Divvy data
 
@@ -216,7 +217,7 @@ def get_historical_data(years:List[str], write_to:str = '', rides=True,
         print(url)
 
         r = requests.get(url)
-        with zipfile.ZipFile(io.BytesIO(r.content)) as z:
+        with ZipFile(BytesIO(r.content)) as z:
             if write_to:
                 write_path = os.path.join(write_to, z_fn.replace('.zip', ''))
                 z.extractall(write_path)

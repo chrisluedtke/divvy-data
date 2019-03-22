@@ -1,8 +1,7 @@
-import requests, time
+import requests
+import time
 
 import pandas as pd
-
-import requests
 
 
 class StationsFeed(object):
@@ -28,9 +27,9 @@ class StationsFeed(object):
         if r.status_code != requests.codes.ok:
             r.raise_for_status()
 
-        r  = r.json()
+        r = r.json()
         df = (pd.DataFrame(r['stationBeanList'])
-                .assign(callTime = r['executionTime']))
+                .assign(callTime=r['executionTime']))
         df['lastCommunicationTime'] = pd.to_datetime(df.lastCommunicationTime)
 
         return df
@@ -39,7 +38,7 @@ class StationsFeed(object):
         """Updates `data` attribute with most recent station data."""
         self.data = StationsFeed.get_current_data()
 
-    def monitor_event_history(self, interval_sec = 5.0, runtime_sec = 1000):
+    def monitor_event_history(self, interval_sec=5.0, runtime_sec=1000):
         """Updates `event_history` attribute with live data from  Divvy
         JSON feed. Only saves differences between updates.
 
@@ -86,9 +85,9 @@ class StationsFeed(object):
         else:
             dupe_cols = ['id', 'availableBikes', 'availableDocks', 'status',
                          'kioskType']
-            diff = new_df.loc[~(new_df.set_index(dupe_cols)
-                                      .index
-                                      .isin(pre_df.set_index(dupe_cols).index))]
+            mask = ~(new_df.set_index(dupe_cols).index
+                           .isin(pre_df.set_index(dupe_cols).index))
+            diff = new_df.loc[mask]
 
             if not diff.empty:
                 print(f"{call_time}: Called & Updated")
