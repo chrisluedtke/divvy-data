@@ -71,6 +71,9 @@ class StationsFeed(object):
         except KeyboardInterrupt:
             pass
 
+        finally:
+            return self.event_history
+
     @staticmethod
     def _get_monitor_update(pre_df):
         """Returns updated data difference between old and updated data"""
