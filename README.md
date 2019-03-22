@@ -32,10 +32,9 @@ rides, stations = divvydata.get_historical_data(
 import divvydata
 
 sf = divvydata.StationsFeed()
-sf.monitor_data(runtime_sec=60)
+df = sf.monitor_event_history(runtime_sec=60)  # also saves to sf.event_history attribute
 
 # filter to stations that received interactions
-df = sf.event_history
 df = df.loc[df['id'].duplicated(keep=False)]
 ```
 
