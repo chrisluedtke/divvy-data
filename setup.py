@@ -5,7 +5,7 @@ README = (Path(__file__).parent / "README.md").read_text()
 
 setup(
     name='divvy-data',
-    version='0.0.2',
+    version='0.0.3',
     description="Methods for loading and monitoring Divvy bikeshare data",
     long_description=README,
     long_description_content_type="text/markdown",
@@ -14,7 +14,7 @@ setup(
     author="Chris Luedtke",
     author_email="chrisluedtke@gmail.com",
     python_requires=">=3.6",
-    install_requires=["lxml", "pandas", "requests"],
+    install_requires=["lxml", "pandas>=0.23.0", "requests"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
