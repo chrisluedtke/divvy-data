@@ -1,17 +1,21 @@
-# Divvy Data
-A package to access historical and live Chicago bikeshare data.
+<div align="center">
+  <h1> Divvy Data</h1>
+  <a href="https://github.com/chrisluedtke/divvy-data/blob/master/LICENSE"><img alt="MIT" src="https://img.shields.io/github/license/chrisluedtke/divvy-data.svg"></a>
+  <a href="https://travis-ci.com/chrisluedtke/divvy-data"><img alt="Travis" src="https://img.shields.io/travis/com/chrisluedtke/divvy-data.svg"></a>
+  <a href="https://pypi.python.org/pypi/divvy-data"><img alt="PyPI" src="https://img.shields.io/pypi/v/divvy-data.svg"></a>
+</div>
 
-**Resources**
-* Write-up: [The Ultimate Day of Chicago Bikeshare](https://chrisluedtke.github.io/divvy-data.html)
-    * Animation: [YouTube](https://www.youtube.com/watch?v=SVueGQPpz14)
-* Analysis notebook: [nbviewer](https://nbviewer.jupyter.org/github/chrisluedtke/divvy-data-analysis/blob/master/notebook.ipynb)
+## About
+
+Divvy Data is a package to access historical and live Chicago bikeshare data.
+
+I used this data to blog about [Chicago  biking and data visualization](https://chrisluedtke.github.io/divvy-data.html). See my analysis notebook on [nbviewer](https://nbviewer.jupyter.org/github/chrisluedtke/divvy-data-analysis/blob/master/notebook.ipynb).
+
+![Divvy Data Animation](img/divvy_day.gif)
 
 ## Set up
-
-Fork/clone the repository or pip install the `divvydata` package:
 ```
-pip install -i https://test.pypi.org/simple/ divvy-data
-pip install git+https://github.com/chrisluedtke/divvy-data.git
+pip install divvy-data
 ```
 
 ## Usage
