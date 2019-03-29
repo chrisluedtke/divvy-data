@@ -11,7 +11,7 @@ Divvy Data is a package to access historical and live Chicago bikeshare data.
 
 I used this data to blog about [Chicago  biking and data visualization](https://chrisluedtke.github.io/divvy-data.html). See my analysis notebook on [nbviewer](https://nbviewer.jupyter.org/github/chrisluedtke/divvy-data-analysis/blob/master/notebook.ipynb).
 
-![Divvy Data Animation](img/divvy_day.gif)
+![Divvy Data Animation](https://github.com/chrisluedtke/divvy-data/blob/master/img/divvy_day.gif?raw=true)
 
 ## Set up
 ```

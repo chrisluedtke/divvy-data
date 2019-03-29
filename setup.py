@@ -5,7 +5,7 @@ README = (Path(__file__).parent / "README.md").read_text()
 
 setup(
     name='divvy-data',
-    version='0.1.1',
+    version='0.1.2',
     description="Download and monitor Divvy bikeshare data",
     long_description=README,
     long_description_content_type="text/markdown",
